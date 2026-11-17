@@ -32,7 +32,7 @@ def lls_eight_point_alg(points1, points2):
     A = np.column_stack((x2*x1, x2*y1, x2,
                          y2*x1, y2*y1, y2,
                          x1, y1, np.ones(len(points1))))
-    # Keep the null vector for an 8 x 9 system
+    # Keep all nine right singular vectors even with eight matches
     _, _, Vh = np.linalg.svd(A, full_matrices=True)
     F = Vh[-1].reshape(3, 3)
 
@@ -171,16 +171,18 @@ def factorization_method(points_im1, points_im2):
     xx, xy, xz, yy, yz, zz = np.linalg.lstsq(equations, target, rcond=None)[0]
     L = np.array([[xx, xy, xz], [xy, yy, yz], [xz, yz, zz]])
 
-    # Use the direction shared by the two camera planes
+    # Find the direction in both camera planes
     normals = np.cross(camera_rows[:, 0], camera_rows[:, 1])
     normals /= np.linalg.norm(normals, axis=1, keepdims=True)
-    shared = np.cross(normals[0], normals[1])
-    shared /= np.linalg.norm(shared)
-    B = np.vstack((shared, np.cross(normals, shared)))
+    shared_direction = np.cross(normals[0], normals[1])
+    shared_direction /= np.linalg.norm(shared_direction)
+    other_directions = np.cross(normals, shared_direction)
+    B = np.vstack((shared_direction, other_directions))
 
-    # Complete the free entry by maximizing the determinant
+    # Fill in the dot product between the last two basis directions
     C = B @ L @ B.T
-    C[1, 2] = C[2, 1] = C[1, 0] * C[0, 2] / C[0, 0]
+    free_entry = C[1, 0] * C[0, 2] / C[0, 0]
+    C[1, 2] = C[2, 1] = free_entry
     basis_inverse = np.linalg.inv(B)
     L = basis_inverse @ C @ basis_inverse.T
 
@@ -216,12 +218,11 @@ def estimate_initial_RT(E):
 
 
 def linear_estimate_3d_point(image_points, camera_matrices):
-    # Two DLT equations per camera
-    u, v = image_points[:, :1], image_points[:, 1:2]
-    m1, m2, m3 = camera_matrices[:, 0], camera_matrices[:, 1], camera_matrices[:, 2]
     rows = np.empty((2 * len(image_points), 4))
-    rows[0::2] = u * m3 - m1
-    rows[1::2] = v * m3 - m2
+    for i, (u, v) in enumerate(image_points[:, :2]):
+        m1, m2, m3 = camera_matrices[i]
+        rows[2*i] = u * m3 - m1
+        rows[2*i + 1] = v * m3 - m2
     _, _, Vt = np.linalg.svd(rows, full_matrices=False)
     point = Vt[-1]
     return point[:3] / point[3]
@@ -235,17 +236,15 @@ def reprojection_error(point_3d, image_points, camera_matrices):
 
 def jacobian(point_3d, camera_matrices):
     projected = camera_matrices @ np.append(point_3d, 1.0)
-    u = projected[:, :1]
-    v = projected[:, 1:2]
-    w = projected[:, 2:3]
-    m1 = camera_matrices[:, 0, :3]
-    m2 = camera_matrices[:, 1, :3]
-    m3 = camera_matrices[:, 2, :3]
-
-    # Differentiate u/w and v/w
     J = np.empty((2 * len(camera_matrices), 3), dtype=projected.dtype)
-    J[0::2] = (w*m1 - u*m3) / w**2
-    J[1::2] = (w*m2 - v*m3) / w**2
+    for i, camera in enumerate(camera_matrices):
+        u, v, w = projected[i]
+        m1, m2, m3 = camera[:, :3]
+
+        # Differentiate the projected x and y coordinates
+        w_squared = w*w
+        J[2*i] = (w*m1 - u*m3) / w_squared
+        J[2*i + 1] = (w*m2 - v*m3) / w_squared
     return J
 
 
