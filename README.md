@@ -2,7 +2,7 @@
 
 Yanbo Cheng
 
-[Writeup](https://iamyanbo.github.io/SYDE671-A4/) · [PDF](A4_Writeup.pdf) · [Submission ZIP](https://github.com/iamyanbo/SYDE671-A4/releases/download/v1.0/SYDE671_A4_Submission.zip)
+[Writeup](https://iamyanbo.github.io/SYDE671-A4/) · [PDF](A4_Writeup.pdf) · [Submission ZIP](https://github.com/iamyanbo/SYDE671-A4/releases/latest/download/SYDE671_A4_Submission.zip)
 
 Install the packages and run the code from this folder.
 

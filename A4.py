@@ -202,11 +202,14 @@ def similarity_alignment(reconstruction, truth):
 def estimate_initial_RT(E):
     U, _, Vt = np.linalg.svd(E)
     W = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
+    R1 = U @ W @ Vt
+    R2 = U @ W.T @ Vt
     translation = U[:, 2]
+
     poses = []
-    for Q in (U @ W @ Vt, U @ W.T @ Vt):
+    for rotation in (R1, R2):
         # Force determinant +1
-        rotation = np.linalg.det(Q) * Q
+        rotation = np.linalg.det(rotation) * rotation
         for direction in (translation, -translation):
             poses.append(np.column_stack((rotation, direction)))
     return np.stack(poses)
