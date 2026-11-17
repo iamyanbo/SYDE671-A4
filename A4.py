@@ -171,21 +171,6 @@ def factorization_method(points_im1, points_im2):
     xx, xy, xz, yy, yz, zz = np.linalg.lstsq(equations, target, rcond=None)[0]
     L = np.array([[xx, xy, xz], [xy, yy, yz], [xz, yz, zz]])
 
-    # Find the direction in both camera planes
-    normals = np.cross(camera_rows[:, 0], camera_rows[:, 1])
-    normals /= np.linalg.norm(normals, axis=1, keepdims=True)
-    shared_direction = np.cross(normals[0], normals[1])
-    shared_direction /= np.linalg.norm(shared_direction)
-    other_directions = np.cross(normals, shared_direction)
-    B = np.vstack((shared_direction, other_directions))
-
-    # Fill in the dot product between the last two basis directions
-    C = B @ L @ B.T
-    free_entry = C[1, 0] * C[0, 2] / C[0, 0]
-    C[1, 2] = C[2, 1] = free_entry
-    basis_inverse = np.linalg.inv(B)
-    L = basis_inverse @ C @ basis_inverse.T
-
     # Factor L and correct both SVD matrices
     Q = np.linalg.cholesky(L)
     return np.linalg.solve(Q, structure), motion @ Q
@@ -362,8 +347,19 @@ if __name__ == "__main__":
         points1 = get_data_from_txt_file(data / "pt_2D_1.txt")
         points2 = get_data_from_txt_file(data / "pt_2D_2.txt")
 
-        # 3.a
-        structure, _ = factorization_method(points1, points2)
+        W = np.vstack((points1[:, :2].T, points2[:, :2].T))
+        W -= W.mean(axis=1, keepdims=True)
+        _, singular_values, Vh = np.linalg.svd(W, full_matrices=False)
+
+        if name == "set1":
+            # 3.a
+            structure, _ = factorization_method(points1, points2)
+            reconstruction_label = "Reconstruction"
+        else:
+            # 3.e
+            # The subset's least-squares L has a negative eigenvalue.
+            structure = np.diag(np.sqrt(singular_values[:3])) @ Vh[:3]
+            reconstruction_label = "Initial SVD shape"
 
         # 3.c, 3.e
         truth = get_data_from_txt_file(data / "pt_3D.txt")
@@ -379,7 +375,7 @@ if __name__ == "__main__":
         for i, (azimuth, title) in enumerate([(-90, "Front view"), (0, "Side view")], 1):
             ax = fig.add_subplot(1, 2, i, projection="3d")
             ax.scatter(*centered_truth.T, s=40, color="#1670bf", alpha=0.8, label="Ground truth")
-            ax.scatter(*aligned.T, s=35, marker="x", color="#da6a13", alpha=0.9, label="Reconstruction")
+            ax.scatter(*aligned.T, s=35, marker="x", color="#da6a13", alpha=0.9, label=reconstruction_label)
             ax.set(xlim=(center[0] - radius, center[0] + radius),
                    ylim=(center[1] - radius, center[1] + radius),
                    zlim=(center[2] - radius, center[2] + radius))
@@ -400,9 +396,7 @@ if __name__ == "__main__":
         plt.close(fig)
 
         # 3.d, 3.f
-        W = np.vstack((points1[:, :2].T, points2[:, :2].T))
-        W -= W.mean(axis=1, keepdims=True)
-        print(name, "singular values =", np.linalg.svd(W, compute_uv=False))
+        print(name, "singular values =", singular_values)
 
     # 4.f
     data = data_dir / "statue"
